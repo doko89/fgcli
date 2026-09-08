@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/local/fgcli/internal/infrastructure/config"
 	"gopkg.in/yaml.v3"
@@ -158,3 +159,81 @@ func orDefault(s, d string) string {
 }
 
 var ErrExists = errors.New("profile already exists (use --force to overwrite)")
+
+// IsPlaceholder reports well-known non-secret api_key values that will
+// always fail auth (exact match, case-insensitive).
+func IsPlaceholder(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "will_be_available",
+		"changeme", "change-me", "change_me",
+		"placeholder", "xxx", "xxxx",
+		"your-api-key", "your_api_key",
+		"tbd", "example", "dummy", "test", "none", "null":
+		return true
+	}
+	return false
+}
+
+type Warning struct {
+	Profile  string `json:"profile,omitempty"`
+	Severity string `json:"severity"`
+	Code     string `json:"code"`
+	Message  string `json:"message"`
+}
+
+// ValidateFile checks the profile file offline (no network): placeholder
+// keys, missing secrets, duplicate hosts, insecure flags.
+func ValidateFile(f *File) []Warning {
+	out := []Warning{}
+	if f.Active != "" {
+		if _, ok := f.Profiles[f.Active]; !ok {
+			out = append(out, Warning{Severity: "error", Code: "unknown_active",
+				Message: fmt.Sprintf("active profile %q not found", f.Active)})
+		}
+	} else if len(f.Profiles) > 0 {
+		out = append(out, Warning{Severity: "info", Code: "no_active",
+			Message: "no active profile (use: fgcli profile use <name>)"})
+	}
+	byHost := map[string][]string{}
+	for name, pr := range f.Profiles {
+		if strings.TrimSpace(pr.Host) == "" {
+			out = append(out, Warning{Profile: name, Severity: "error", Code: "missing_host",
+				Message: "host is empty"})
+		} else {
+			byHost[pr.Host] = append(byHost[pr.Host], name)
+		}
+		key := secret(pr.APIKey, pr.APIKeyEnv)
+		if key == "" {
+			key = secret(pr.Token, pr.TokenEnv)
+		}
+		switch {
+		case pr.APIKey == "" && pr.APIKeyEnv == "" && pr.Token == "" && pr.TokenEnv == "":
+			out = append(out, Warning{Profile: name, Severity: "error", Code: "missing_secret",
+				Message: "no api_key/api_key_env configured"})
+		case key == "":
+			out = append(out, Warning{Profile: name, Severity: "error", Code: "missing_secret",
+				Message: "secret env var is unset or empty"})
+		case IsPlaceholder(key):
+			out = append(out, Warning{Profile: name, Severity: "error", Code: "placeholder_key",
+				Message: "api_key looks like a placeholder — auth will fail"})
+		}
+		if pr.Insecure {
+			out = append(out, Warning{Profile: name, Severity: "warn", Code: "insecure",
+				Message: "insecure:true disables TLS verification"})
+		}
+	}
+	for host, names := range byHost {
+		if len(names) > 1 {
+			sort.Strings(names)
+			out = append(out, Warning{Severity: "info", Code: "duplicate_host",
+				Message: fmt.Sprintf("host %s shared by: %s (verify — possible copy-paste)", host, strings.Join(names, ", "))})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Profile != out[j].Profile {
+			return out[i].Profile < out[j].Profile
+		}
+		return out[i].Code < out[j].Code
+	})
+	return out
+}

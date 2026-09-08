@@ -20,9 +20,9 @@ var helpTexts = map[string]string{
 	"raw":           "fgcli raw get|post|put|delete <path> [--vdom V] [--data JSON|--from-stdin|--from-file] [--dry-run]\npath may omit the /api/v2 prefix; --vdom sent only when explicit",
 	"trace":         "fgcli trace --dst IP [--src IP] [--dport N] [--vdom V]\ncorrelates vip (extip+dport) with matching policies (src/dst/service)",
 	"system":        "fgcli system status|license|fortiguard|ntp|dns|dhcp|snmp",
-	"vpn":           "fgcli vpn ipsec [--filter SUB]",
+	"vpn":           "fgcli vpn ipsec [--filter SUB]\nfgcli vpn ssl get  (alias: raw get cmdb/vpn.ssl/settings)",
 	"routing":       "fgcli routing status",
-	"user":          "fgcli user firewall|banned [--filter SUB]",
+	"user":          "fgcli user firewall|banned [--filter SUB]\nfgcli user group list|get <GROUP>\nfgcli user group add-member <GROUP> <USER> [--dry-run]\nfgcli user group rm-member <GROUP> <USER> --yes [--dry-run]\nfgcli user local list|get <NAME>\nfgcli user local create <NAME> --password P [--group G,...] [--status enable] | --from-stdin [--dry-run]\nfgcli user local delete <NAME> --yes [--dry-run]",
 	"security":      "fgcli security ips [--filter SUB]\nfgcli security waf [list|get <id>]\nfgcli security dlp [list|get <id>]\nfgcli security proxy-pac [--out PATH]",
 	"network":       "fgcli network dnsfilter list|get <id>",
 	"switch":        "fgcli switch status [--filter SUB]",
@@ -30,7 +30,7 @@ var helpTexts = map[string]string{
 	"fortiview":     "fgcli fortiview",
 	"log":           "fgcli log <fortianalyzer|forticloud|memory|disk> <type> [--filter SUB]",
 	"doctor":        "fgcli doctor",
-	"profile":       "fgcli profile list|show <name>|use <name>|add <name> ...|rm <name> --yes\nfgcli profile set <name>  (alias of use)",
+	"profile":       "fgcli profile list|show <name>|use <name>|add <name> ...|rm <name> --yes|validate [name]\nfgcli profile set <name>  (alias of use)",
 	"backup":        "fgcli backup download [--scope global] [--out PATH]  (needs RW perms)",
 }
 

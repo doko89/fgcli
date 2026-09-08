@@ -79,18 +79,39 @@ func runSystem(ctx context.Context, d Deps, args []string) int {
 }
 
 func runVpn(ctx context.Context, d Deps, args []string) int {
-	if len(args) < 1 || args[0] != "ipsec" {
-		output.Fail("usage", fmt.Errorf("usage: fgcli vpn ipsec [--filter SUB]"))
+	if len(args) < 1 {
+		output.Fail("usage", fmt.Errorf("usage: fgcli vpn ipsec [--filter SUB] | fgcli vpn ssl get"))
 		return 1
 	}
-	g, _, _ := parseGlobals(args[1:])
-	list, err := d.Vpn.List(ctx, g.vdom)
-	if err != nil {
-		output.Fail("api_error", err)
-		return 2
+	switch args[0] {
+	case "ipsec":
+		g, _, _ := parseGlobals(args[1:])
+		list, err := d.Vpn.List(ctx, g.vdom)
+		if err != nil {
+			output.Fail("api_error", err)
+			return 2
+		}
+		output.Print(filterSlice(list, g.filter))
+		return 0
+	case "ssl":
+		// alias for: raw get cmdb/vpn.ssl/settings
+		rest := args[1:]
+		if len(rest) >= 1 && rest[0] != "get" {
+			output.Fail("usage", fmt.Errorf("usage: fgcli vpn ssl get"))
+			return 1
+		}
+		g, _, _ := parseGlobals(rest)
+		s, err := d.Vpn.Ssl(ctx, g.vdom)
+		if err != nil {
+			output.Fail("api_error", err)
+			return 2
+		}
+		output.Print(s)
+		return 0
+	default:
+		output.Fail("usage", fmt.Errorf("usage: fgcli vpn ipsec [--filter SUB] | fgcli vpn ssl get"))
+		return 1
 	}
-	output.Print(filterSlice(list, g.filter))
-	return 0
 }
 
 func runNetwork(ctx context.Context, d Deps, args []string) int {

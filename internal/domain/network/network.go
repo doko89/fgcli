@@ -13,6 +13,7 @@ type Tunnel struct {
 
 type VpnRepository interface {
 	List(ctx context.Context, vdom string) ([]Tunnel, error)
+	Ssl(ctx context.Context, vdom string) (any, error)
 }
 
 type RouteStats struct {

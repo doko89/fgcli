@@ -12,15 +12,20 @@ export FG_HOST="https://192.0.2.1" FG_API_KEY="<api-key>" FG_VDOM="root" FG_INSE
 ./fgcli doctor   # tes koneksi + status
 ```
 
-## Profile (`~/.fgcli/config.yaml`, override via `FGCLI_CONFIG`)
+## Profile (satu file: `~/.fgcli/config.yaml`, override via `FGCLI_CONFIG`)
 ```bash
 export FG_API_KEY_FG1='...'   # secret via env, tidak tertulis di disk
 ./fgcli profile add fg1 --host https://172.28.29.1:15443 --api-key-env FG_API_KEY_FG1 --insecure
-./fgcli profile set fg1    # alias: profile use fg1
+./fgcli profile use fg1    # switch profil aktif (alias: profile set fg1)
 ./fgcli profile list       # secret tidak pernah ditampilkan
+./fgcli profile validate   # offline: placeholder key, host duplikat, insecure
 ./fgcli doctor --profile fg1
 ./fgcli --profile fg1 address list
 ```
+Hanya `~/.fgcli/config.yaml` yang dibaca; file lama (`~/fgcli/config.yaml`,
+`~/tmp/FG-CLI/config.ini`) diabaikan (ada hint di stderr bila masih ada).
+`api_key` placeholder (`will_be_available`, `changeme`, `xxx`, ...) langsung
+ditolak sebelum request; `insecure:true` selalu memicu warning di stderr.
 Precedence: flag (`--host/--api-key`) > env (`FG_*`) > profile aktif.
 File ditulis chmod `0600`. Kompatibel baca: `FG_API_KEY`/`--token`/`token:` lama tetap dibaca sebagai API key.
 
@@ -97,6 +102,7 @@ policy spesifik diurut dulu, `disable` ditandai di `via`.
 
 ## Help, grup, policy lifecycle, backup
 ```bash
+./fgcli --help                # == fgcli help == fgcli -h (tanpa auth, exit 0)
 ./fgcli vip --help            # tanpa auth, exit 0 (juga: fgcli help vip)
 ./fgcli vipgrp list           # [] di box ini (endpoint valid, kosong)
 ./fgcli addrgrp list          # 6 grup (BO_RT, G Suite, ...)
@@ -113,7 +119,12 @@ move/delete) terverifikasi via `--dry-run` + httptest karena user readonly.
 ## Pakai
 ```bash
 go build -o fgcli ./cmd/fgcli
+make install   # -> ~/.local/bin/fgcli (pastikan di PATH: export PATH="$HOME/.local/bin:$PATH")
 ./fgcli version
+./fgcli --pretty doctor   # --pretty = JSON indent untuk manusia; default tetap compact
+./fgcli vpn ssl get       # alias: raw get cmdb/vpn.ssl/settings
+./fgcli user group add-member VPN doko_baru --dry-run
+./fgcli user local create doko_baru --password xxx --group VPN --dry-run
 ./fgcli doctor
 ./fgcli system status
 ./fgcli address list --vdom root

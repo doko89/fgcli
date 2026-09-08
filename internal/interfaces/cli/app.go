@@ -55,6 +55,7 @@ type Deps struct {
 	Tracer    *tru.UseCase
 	Sys       dsys.Repository
 	Version   string
+	Insecure  bool
 }
 
 type globals struct {
@@ -66,11 +67,53 @@ type globals struct {
 	filter  string
 }
 
-// valueFlags are top-level flags that consume the next arg.
+// valueFlags are flags that consume the next arg (their values must not
+// be mistaken for commands or --help requests).
 var valueFlags = map[string]bool{
 	"--profile": true, "--host": true, "--api-key": true, "--token": true,
-	"--vdom": true, "--from-file": true,
+	"--api-key-env": true, "--token-env": true,
+	"--vdom": true, "--from-file": true, "--data": true, "--out": true,
 	"--filter": true, "--contains": true,
+	"--name": true, "--subnet": true, "--comment": true, "--type": true,
+	"--protocol": true, "--tcp": true, "--udp": true, "--sctp": true,
+	"--member": true, "--src": true, "--dst": true, "--dport": true,
+	"--new-id": true, "--before": true, "--after": true, "--policyid": true,
+	"--srcintf": true, "--dstintf": true, "--srcaddr": true, "--dstaddr": true,
+	"--service": true, "--action": true, "--extip": true, "--mappedip": true,
+	"--extintf": true, "--extport": true, "--mappedport": true,
+	"--startip": true, "--endip": true, "--scope": true,
+	"--password": true, "--passwd": true, "--group": true, "--status": true,
+}
+
+// HelpTarget detects an explicit help request anywhere in argv (help, -h,
+// --help), skipping flag values. It returns the resource the help is about,
+// or "" for general help. ok=false means no help was requested.
+func HelpTarget(argv []string) (target string, ok bool) {
+	for i := 0; i < len(argv); i++ {
+		a := argv[i]
+		if strings.HasPrefix(a, "--") && !strings.Contains(a, "=") && valueFlags[a] {
+			i++
+			continue
+		}
+		if len(a) > 0 && a[0] == '-' && a != "-h" && a != "--help" {
+			continue
+		}
+		switch a {
+		case "help":
+			if i+1 < len(argv) {
+				if _, known := HelpFor(argv[i+1]); known {
+					return argv[i+1], true
+				}
+			}
+			return "", true
+		case "-h", "--help":
+			return target, true
+		}
+		if _, known := HelpFor(a); known {
+			target = a
+		}
+	}
+	return "", false
 }
 
 // TopCommand returns the resource verb (address, profile, ...) skipping
@@ -96,6 +139,14 @@ func Run(ctx context.Context, d Deps, argv []string) int {
 	if len(argv) < 1 {
 		usage()
 		return 1
+	}
+	if target, ok := HelpTarget(argv); ok {
+		if target == "" {
+			usage()
+			return 0
+		}
+		PrintHelp(target)
+		return 0
 	}
 	cmd := TopCommand(argv)
 	rest := argv
@@ -160,7 +211,7 @@ func Run(ctx context.Context, d Deps, argv []string) int {
 			output.Fail("connect_error", err)
 			return 2
 		}
-		output.Print(map[string]any{"reachable": true, "status": st})
+		output.Print(map[string]any{"reachable": true, "insecure_skip_verify": d.Insecure, "status": st})
 		return 0
 	case "version":
 		output.Print(map[string]string{"version": d.Version})
@@ -192,8 +243,9 @@ func usage() {
 	output.Logf("  interface list|get [--filter SUB]  (read-only)")
 	output.Logf("  zone      list|get [--filter SUB]  (read-only)")
 	output.Logf("  system status|license|fortiguard|ntp|dns|dhcp|snmp")
-	output.Logf("  vpn ipsec [--filter SUB]  |  routing status")
-	output.Logf("  user firewall|banned  |  security ips|waf|dlp|proxy-pac")
+	output.Logf("  vpn ipsec [--filter SUB]  |  vpn ssl get  |  routing status")
+	output.Logf("  user firewall|banned  |  user group add-member G U  |  user local create N --password P")
+	output.Logf("  security ips|waf|dlp|proxy-pac")
 	output.Logf("  network dnsfilter list|get  |  service voip get <name>")
 	output.Logf("  switch status  |  wifi ap  |  fortiview")
 	output.Logf("  log <fortianalyzer|forticloud|memory|disk> <type> [--filter SUB]")
@@ -220,6 +272,8 @@ func parseGlobals(args []string) (globals, []string, map[string]string) {
 			g.vdomSet = true
 		case a == "--dry-run":
 			g.dryRun = true
+		case a == "--pretty" || a == "--json":
+			output.Pretty = a == "--pretty"
 		case a == "--from-stdin":
 			g.fromSrc = "-"
 		case a == "--from-file" && i+1 < len(args):

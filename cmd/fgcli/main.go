@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 
 	au "github.com/local/fgcli/internal/application/address"
@@ -28,55 +29,42 @@ import (
 	"github.com/local/fgcli/internal/interfaces/cli"
 )
 
-var version = "v0.2.0"
+var version = "v0.2.1"
 
 func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
 func run(argv []string) int {
-	// version/help/profile must work without auth (AI probe friendly)
-	cmd := cli.TopCommand(argv)
-	if len(argv) == 0 || cmd == "version" || cmd == "help" || cmd == "-h" || cmd == "--help" {
-		if len(argv) == 0 {
-			output.Fail("usage", errUsage())
-			return 1
+	if len(argv) == 0 {
+		output.Fail("usage", errUsage())
+		return 1
+	}
+	for _, a := range argv {
+		if a == "--pretty" {
+			output.Pretty = true
 		}
-		if cmd == "version" {
-			output.Print(map[string]string{"version": version})
+	}
+	// version/help/profile must work without auth (AI probe friendly)
+	if target, ok := cli.HelpTarget(argv); ok {
+		if target == "" {
+			printGeneralHelp()
 			return 0
 		}
-		if cmd == "help" {
-			for i, a := range argv {
-				if a == "help" && i+1 < len(argv) {
-					if _, known := cli.HelpFor(argv[i+1]); known {
-						cli.PrintHelp(argv[i+1])
-						return 0
-					}
-				}
-			}
-		}
-		output.Logf("fgcli %s — FortiGate CLI for humans and AI agents", version)
-		output.Logf("Usage: FG_HOST=... FG_API_KEY=... fgcli <address|policy|system|doctor|profile|version> ...")
-		output.Logf("   or: fgcli --profile fg1 ...  (see fgcli profile add)")
-		output.Logf("Docs: README.md (contract: stdout = single JSON envelope)")
+		cli.PrintHelp(target)
+		return 0
+	}
+	cmd := cli.TopCommand(argv)
+	if cmd == "version" {
+		output.Print(map[string]string{"version": version})
 		return 0
 	}
 	if cmd == "profile" {
+		warnLegacyConfig()
 		for i, a := range argv {
 			if a == "profile" {
 				return cli.RunProfile(argv[i+1:])
 			}
-		}
-	}
-	// Per-resource help works without auth.
-	for i, a := range argv {
-		if a == cmd {
-			if _, known := cli.HelpFor(cmd); known && cli.WantHelp(argv[i+1:]) {
-				cli.PrintHelp(cmd)
-				return 0
-			}
-			break
 		}
 	}
 	// Precedence: flags > env > profile file.
@@ -94,6 +82,13 @@ func run(argv []string) int {
 	if err := cfg.Validate(); err != nil {
 		output.Fail("config_error", err)
 		return 1
+	}
+	if profile.IsPlaceholder(cfg.APIKey) {
+		output.Fail("config_error", errPlaceholderKey())
+		return 1
+	}
+	if cfg.Insecure {
+		output.Logf("warn: TLS verification disabled (insecure:true / FG_INSECURE=1) — do not use in prod")
 	}
 	ctx := context.Background()
 	client := fortios.NewClient(cfg.Host, cfg.APIKey, cfg.Insecure)
@@ -125,11 +120,47 @@ func run(argv []string) int {
 			Addrs: fortios.NewAddressRepo(client),
 			Svcs:  fortios.NewSvcRepo(client),
 		},
-		Sys:     fortios.NewSysRepo(client),
-		Version: version,
+		Sys:      fortios.NewSysRepo(client),
+		Version:  version,
+		Insecure: cfg.Insecure,
 	}
 	// default vdom from env when flag absent
 	return cli.Run(ctx, deps, argv)
+}
+
+func printGeneralHelp() {
+	lines := []string{
+		"fgcli " + version + " — FortiGate CLI for humans and AI agents",
+		"Usage: FG_HOST=... FG_API_KEY=... fgcli <address|policy|system|doctor|profile|version> ...",
+		"   or: fgcli --profile fg1 ...  (see fgcli profile add)",
+		"   or: fgcli help <resource> | fgcli <resource> --help  (also: --help, -h)",
+		"Config: single file ~/.fgcli/config.yaml (override: FGCLI_CONFIG)",
+		"Docs: README.md (contract: stdout = single JSON envelope)",
+	}
+	for _, l := range lines {
+		output.Logf("%s", l)
+	}
+	output.Print(map[string]string{"help": strings.Join(lines, "\n")})
+}
+
+// warnLegacyConfig points at files from older setups that fgcli ignores.
+func warnLegacyConfig() {
+	home, err := os.UserHomeDir()
+	if err != nil || os.Getenv("FGCLI_CONFIG") != "" {
+		return
+	}
+	for _, p := range []string{
+		filepath.Join(home, "fgcli", "config.yaml"),
+		filepath.Join(home, "tmp", "FG-CLI", "config.ini"),
+	} {
+		if _, err := os.Stat(p); err == nil {
+			output.Logf("hint: legacy config %s is ignored; only ~/.fgcli/config.yaml is used", p)
+		}
+	}
+}
+
+func errPlaceholderKey() error {
+	return usageErr{"auth looks like a placeholder api_key (run: fgcli profile validate)"}
 }
 
 func overrideFromArgs(c config.Config, argv []string) config.Config {

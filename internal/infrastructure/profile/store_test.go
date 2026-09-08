@@ -110,6 +110,48 @@ func TestResolveLegacyTokenFallback(t *testing.T) {
 	}
 }
 
+func TestIsPlaceholder(t *testing.T) {
+	for _, k := range []string{"will_be_available", "WILL_BE_AVAILABLE", "changeme", "xxx", "  placeholder  ", "tbd"} {
+		if !IsPlaceholder(k) {
+			t.Fatalf("expected placeholder: %q", k)
+		}
+	}
+	for _, k := range []string{"xmsjcGbx99txwhjy0NgsNxd0mm5G87", "s3cret", "xxxtra-long-key"} {
+		if IsPlaceholder(k) {
+			t.Fatalf("real key flagged as placeholder: %q", k)
+		}
+	}
+}
+
+func TestValidateFile(t *testing.T) {
+	tmpConfig(t)
+	t.Setenv("FG_EMPTY_REF", "")
+	f := &File{
+		Active: "ghost",
+		Profiles: map[string]Profile{
+			"ho-readonly": {Host: "https://172.28.29.1:15443", APIKey: "realkey123", Insecure: true},
+			"ho-admin":    {Host: "https://172.28.29.1:15443", APIKey: "will_be_available"},
+			"env-missing": {Host: "https://10.0.0.1", APIKeyEnv: "FG_EMPTY_REF"},
+			"no-secret":   {Host: "https://10.0.0.2"},
+			"no-host":     {APIKey: "realkey123"},
+			"cyber-admin": {Host: "https://172.28.29.1:15443", APIKey: "alsorealkey"},
+		},
+	}
+	warns := ValidateFile(f)
+	byCode := map[string]int{}
+	for _, w := range warns {
+		byCode[w.Code]++
+	}
+	for code, want := range map[string]int{
+		"unknown_active": 1, "placeholder_key": 1, "missing_secret": 2,
+		"missing_host": 1, "insecure": 1, "duplicate_host": 1, "no_active": 0,
+	} {
+		if byCode[code] != want {
+			t.Fatalf("code %q: got %d warnings, want %d (%+v)", code, byCode[code], want, warns)
+		}
+	}
+}
+
 func TestSummariesRedactSecrets(t *testing.T) {
 	f := &File{Profiles: map[string]Profile{
 		"fg1": {Host: "h", APIKey: "tok"},

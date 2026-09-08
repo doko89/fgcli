@@ -23,6 +23,25 @@ func RunProfile(args []string) int {
 	case "list":
 		output.Print(map[string]any{"profiles": f.Summaries()})
 		return 0
+	case "validate":
+		warns := profile.ValidateFile(f)
+		if len(rest) >= 1 {
+			keep := warns[:0]
+			for _, w := range warns {
+				if w.Profile == rest[0] || w.Profile == "" {
+					keep = append(keep, w)
+				}
+			}
+			warns = keep
+		}
+		valid := true
+		for _, w := range warns {
+			if w.Severity == "error" {
+				valid = false
+			}
+		}
+		output.Print(map[string]any{"valid": valid, "warnings": warns})
+		return 0
 	case "show":
 		if len(rest) < 1 {
 			output.Fail("usage", fmt.Errorf("usage: fgcli profile show <name>"))

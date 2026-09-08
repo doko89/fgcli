@@ -23,6 +23,15 @@ func (s *VpnRepo) List(ctx context.Context, vdom string) ([]dnet.Tunnel, error) 
 	return out, nil
 }
 
+func (s *VpnRepo) Ssl(ctx context.Context, vdom string) (any, error) {
+	b, err := s.c.do(ctx, "GET", "/api/v2/cmdb/vpn.ssl/settings", vdomQuery(vdom), nil)
+	if err != nil {
+		return nil, err
+	}
+	var out any
+	return out, decodeResults(b, &out)
+}
+
 type RoutingRepo struct{ c *Client }
 
 func NewRoutingRepo(c *Client) *RoutingRepo { return &RoutingRepo{c: c} }

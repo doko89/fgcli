@@ -17,20 +17,31 @@ type Err struct {
 	Message string `json:"message"`
 }
 
+var Pretty bool
+
 func Print(data any) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetEscapeHTML(false)
+	if Pretty {
+		enc.SetIndent("", "  ")
+	}
 	_ = enc.Encode(Envelope{OK: true, Data: data})
 }
 
 func Fail(code string, err error) {
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetEscapeHTML(false)
 	msg := ""
 	if err != nil {
 		msg = err.Error()
 	}
-	_ = enc.Encode(Envelope{OK: false, Error: &Err{Code: code, Message: msg}})
+	env := Envelope{OK: false, Error: &Err{Code: code, Message: msg}}
+	if Pretty {
+		b, _ := json.MarshalIndent(env, "", "  ")
+		fmt.Fprintln(os.Stdout, string(b))
+		return
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(env)
 }
 
 func Logf(format string, args ...any) {
