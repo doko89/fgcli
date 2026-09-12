@@ -7,12 +7,17 @@ import (
 	dsvc "github.com/local/fgcli/internal/domain/service"
 )
 
+const (
+	apiFirewallServiceCustom = "/api/v2/cmdb/firewall.service/custom"
+	apiFirewallServiceGroup  = "/api/v2/cmdb/firewall.service/group"
+)
+
 type SvcRepo struct{ c *Client }
 
 func NewSvcRepo(c *Client) *SvcRepo { return &SvcRepo{c: c} }
 
 func (s *SvcRepo) List(ctx context.Context, vdom string) ([]dsvc.Svc, error) {
-	b, err := s.c.do(ctx, "GET", "/api/v2/cmdb/firewall.service/custom", vdomQuery(vdom), nil)
+	b, err := s.c.do(ctx, "GET", apiFirewallServiceCustom, vdomQuery(vdom), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -21,7 +26,7 @@ func (s *SvcRepo) List(ctx context.Context, vdom string) ([]dsvc.Svc, error) {
 }
 
 func (s *SvcRepo) Get(ctx context.Context, name, vdom string) (dsvc.Svc, error) {
-	b, err := s.c.do(ctx, "GET", "/api/v2/cmdb/firewall.service/custom/"+url.PathEscape(name), vdomQuery(vdom), nil)
+	b, err := s.c.do(ctx, "GET", apiFirewallServiceCustom+"/"+url.PathEscape(name), vdomQuery(vdom), nil)
 	if err != nil {
 		return dsvc.Svc{}, err
 	}
@@ -36,21 +41,21 @@ func (s *SvcRepo) Get(ctx context.Context, name, vdom string) (dsvc.Svc, error) 
 }
 
 func (s *SvcRepo) Create(ctx context.Context, v dsvc.Svc, vdom string) (dsvc.Svc, error) {
-	if _, err := s.c.do(ctx, "POST", "/api/v2/cmdb/firewall.service/custom", vdomQuery(vdom), v); err != nil {
+	if _, err := s.c.do(ctx, "POST", apiFirewallServiceCustom, vdomQuery(vdom), v); err != nil {
 		return dsvc.Svc{}, err
 	}
 	return v, nil
 }
 
 func (s *SvcRepo) Update(ctx context.Context, v dsvc.Svc, vdom string) (dsvc.Svc, error) {
-	if _, err := s.c.do(ctx, "PUT", "/api/v2/cmdb/firewall.service/custom/"+url.PathEscape(v.Name), vdomQuery(vdom), v); err != nil {
+	if _, err := s.c.do(ctx, "PUT", apiFirewallServiceCustom+"/"+url.PathEscape(v.Name), vdomQuery(vdom), v); err != nil {
 		return dsvc.Svc{}, err
 	}
 	return v, nil
 }
 
 func (s *SvcRepo) Delete(ctx context.Context, name, vdom string) error {
-	_, err := s.c.do(ctx, "DELETE", "/api/v2/cmdb/firewall.service/custom/"+url.PathEscape(name), vdomQuery(vdom), nil)
+	_, err := s.c.do(ctx, "DELETE", apiFirewallServiceCustom+"/"+url.PathEscape(name), vdomQuery(vdom), nil)
 	return err
 }
 
@@ -59,7 +64,7 @@ type SvcGroupRepo struct{ c *Client }
 func NewSvcGroupRepo(c *Client) *SvcGroupRepo { return &SvcGroupRepo{c: c} }
 
 func (s *SvcGroupRepo) List(ctx context.Context, vdom string) ([]dsvc.Group, error) {
-	b, err := s.c.do(ctx, "GET", "/api/v2/cmdb/firewall.service/group", vdomQuery(vdom), nil)
+	b, err := s.c.do(ctx, "GET", apiFirewallServiceGroup, vdomQuery(vdom), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +73,7 @@ func (s *SvcGroupRepo) List(ctx context.Context, vdom string) ([]dsvc.Group, err
 }
 
 func (s *SvcGroupRepo) Get(ctx context.Context, name, vdom string) (dsvc.Group, error) {
-	b, err := s.c.do(ctx, "GET", "/api/v2/cmdb/firewall.service/group/"+url.PathEscape(name), vdomQuery(vdom), nil)
+	b, err := s.c.do(ctx, "GET", apiFirewallServiceGroup+"/"+url.PathEscape(name), vdomQuery(vdom), nil)
 	if err != nil {
 		return dsvc.Group{}, err
 	}
@@ -83,21 +88,21 @@ func (s *SvcGroupRepo) Get(ctx context.Context, name, vdom string) (dsvc.Group, 
 }
 
 func (s *SvcGroupRepo) Create(ctx context.Context, g dsvc.Group, vdom string) (dsvc.Group, error) {
-	if _, err := s.c.do(ctx, "POST", "/api/v2/cmdb/firewall.service/group", vdomQuery(vdom), g); err != nil {
+	if _, err := s.c.do(ctx, "POST", apiFirewallServiceGroup, vdomQuery(vdom), g); err != nil {
 		return dsvc.Group{}, err
 	}
 	return g, nil
 }
 
 func (s *SvcGroupRepo) Update(ctx context.Context, g dsvc.Group, vdom string) (dsvc.Group, error) {
-	if _, err := s.c.do(ctx, "PUT", "/api/v2/cmdb/firewall.service/group/"+url.PathEscape(g.Name), vdomQuery(vdom), g); err != nil {
+	if _, err := s.c.do(ctx, "PUT", apiFirewallServiceGroup+"/"+url.PathEscape(g.Name), vdomQuery(vdom), g); err != nil {
 		return dsvc.Group{}, err
 	}
 	return g, nil
 }
 
 func (s *SvcGroupRepo) Delete(ctx context.Context, name, vdom string) error {
-	_, err := s.c.do(ctx, "DELETE", "/api/v2/cmdb/firewall.service/group/"+url.PathEscape(name), vdomQuery(vdom), nil)
+	_, err := s.c.do(ctx, "DELETE", apiFirewallServiceGroup+"/"+url.PathEscape(name), vdomQuery(vdom), nil)
 	return err
 }
 

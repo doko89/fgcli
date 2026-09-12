@@ -6,9 +6,9 @@ import (
 	domain "github.com/local/fgcli/internal/domain/log"
 )
 
-type UseCase struct{ repo domain.Repository }
+type UseCase struct{ repo domain.Fetcher }
 
-func New(repo domain.Repository) *UseCase { return &UseCase{repo: repo} }
+func New(repo domain.Fetcher) *UseCase { return &UseCase{repo: repo} }
 
 func (u *UseCase) Fetch(ctx context.Context, source, logtype, vdom string) ([]domain.Entry, error) {
 	if err := domain.ValidSource(source); err != nil {

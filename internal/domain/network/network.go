@@ -25,6 +25,6 @@ type RouteStats struct {
 // NOTE: scalar status structs above keep zero values on marshal
 // (no omitempty): 0 routes / 0 clients is data, not absence.
 
-type RoutingRepository interface {
+type RoutingStatser interface {
 	Stats(ctx context.Context, vdom string) (RouteStats, error)
 }

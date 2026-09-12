@@ -19,9 +19,9 @@ func (u *VpnUseCase) Ssl(ctx context.Context, vdom string) (any, error) {
 	return u.repo.Ssl(ctx, vdom)
 }
 
-type RoutingUseCase struct{ repo domain.RoutingRepository }
+type RoutingUseCase struct{ repo domain.RoutingStatser }
 
-func NewRouting(repo domain.RoutingRepository) *RoutingUseCase { return &RoutingUseCase{repo: repo} }
+func NewRouting(repo domain.RoutingStatser) *RoutingUseCase { return &RoutingUseCase{repo: repo} }
 
 func (u *RoutingUseCase) Stats(ctx context.Context, vdom string) (domain.RouteStats, error) {
 	return u.repo.Stats(ctx, vdom)

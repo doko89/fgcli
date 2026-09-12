@@ -7,9 +7,9 @@ import (
 	domain "github.com/local/fgcli/internal/domain/raw"
 )
 
-type UseCase struct{ repo domain.Repository }
+type UseCase struct{ repo domain.Doer }
 
-func New(repo domain.Repository) *UseCase { return &UseCase{repo: repo} }
+func New(repo domain.Doer) *UseCase { return &UseCase{repo: repo} }
 
 func (u *UseCase) Do(ctx context.Context, method, path, vdom string, body json.RawMessage) (json.RawMessage, error) {
 	if err := domain.ValidMethod(method); err != nil {

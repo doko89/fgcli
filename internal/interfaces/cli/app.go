@@ -67,6 +67,8 @@ type globals struct {
 	filter  string
 }
 
+const flagHelp = "--help"
+
 // valueFlags are flags that consume the next arg (their values must not
 // be mistaken for commands or --help requests).
 var valueFlags = map[string]bool{
@@ -91,29 +93,47 @@ var valueFlags = map[string]bool{
 func HelpTarget(argv []string) (target string, ok bool) {
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
-		if strings.HasPrefix(a, "--") && !strings.Contains(a, "=") && valueFlags[a] {
+		if isFlagValuePair(a) {
 			i++
 			continue
 		}
-		if len(a) > 0 && a[0] == '-' && a != "-h" && a != "--help" {
+		if isOtherFlag(a) {
 			continue
 		}
-		switch a {
-		case "help":
-			if i+1 < len(argv) {
-				if _, known := HelpFor(argv[i+1]); known {
-					return argv[i+1], true
-				}
-			}
-			return "", true
-		case "-h", "--help":
-			return target, true
-		}
-		if _, known := HelpFor(a); known {
-			target = a
+		var ret string
+		var done bool
+		target, ret, done = checkHelpToken(a, argv, i, target)
+		if done {
+			return ret, true
 		}
 	}
 	return "", false
+}
+
+func isFlagValuePair(a string) bool {
+	return strings.HasPrefix(a, "--") && !strings.Contains(a, "=") && valueFlags[a]
+}
+
+func isOtherFlag(a string) bool {
+	return len(a) > 0 && a[0] == '-' && a != "-h" && a != flagHelp
+}
+
+func checkHelpToken(a string, argv []string, i int, target string) (string, string, bool) {
+	switch a {
+	case "help":
+		if i+1 < len(argv) {
+			if _, known := HelpFor(argv[i+1]); known {
+				return target, argv[i+1], true
+			}
+		}
+		return target, "", true
+	case "-h", flagHelp:
+		return target, target, true
+	}
+	if _, known := HelpFor(a); known {
+		return a, "", false
+	}
+	return target, "", false
 }
 
 // TopCommand returns the resource verb (address, profile, ...) skipping
@@ -216,7 +236,7 @@ func Run(ctx context.Context, d Deps, argv []string) int {
 	case "version":
 		output.Print(map[string]string{"version": d.Version})
 		return 0
-	case "help", "-h", "--help":
+	case "help", "-h", flagHelp:
 		if len(rest) >= 1 {
 			if _, ok := HelpFor(rest[0]); ok {
 				PrintHelp(rest[0])
@@ -261,62 +281,128 @@ func parseGlobals(args []string) (globals, []string, map[string]string) {
 	g := globals{vdom: os.Getenv("FG_VDOM")}
 	var rest []string
 	for i := 0; i < len(args); i++ {
-		a := args[i]
-		switch {
-		case a == "--vdom" && i+1 < len(args):
-			i++
-			g.vdom = args[i]
-			g.vdomSet = true
-		case len(a) > 7 && a[:7] == "--vdom=":
-			g.vdom = a[7:]
-			g.vdomSet = true
-		case a == "--dry-run":
-			g.dryRun = true
-		case a == "--pretty" || a == "--json":
-			output.Pretty = a == "--pretty"
-		case a == "--from-stdin":
-			g.fromSrc = "-"
-		case a == "--from-file" && i+1 < len(args):
-			i++
-			g.fromSrc = args[i]
-		case len(a) > 12 && a[:12] == "--from-file=":
-			g.fromSrc = a[12:]
-		case a == "--yes":
-			g.yes = true
-		case (a == "--filter" || a == "--contains") && i+1 < len(args):
-			i++
-			g.filter = args[i]
-		case len(a) > 9 && a[:9] == "--filter=":
-			g.filter = a[9:]
-		case len(a) > 11 && a[:11] == "--contains=":
-			g.filter = a[11:]
-		case a == "--profile" && i+1 < len(args):
-			i++ // consumed in main; stripped here so positionals stay clean
-		case len(a) > 10 && a[:10] == "--profile=":
-		case a == "--host" && i+1 < len(args):
-			i++
-		case len(a) > 7 && a[:7] == "--host=":
-		case a == "--api-key" && i+1 < len(args):
-			i++
-		case len(a) > 10 && a[:10] == "--api-key=":
-		case a == "--token" && i+1 < len(args):
-			i++
-		case len(a) > 8 && a[:8] == "--token=":
-		case a == "--api-key-env" && i+1 < len(args):
-			i++
-		case len(a) > 14 && a[:14] == "--api-key-env=":
-		case a == "--token-env" && i+1 < len(args):
-			i++
-		case len(a) > 12 && a[:12] == "--token-env=":
-		case a == "--insecure":
-		default:
-			rest = append(rest, a)
+		ni, isFlag := consumeGlobal(args, i, &g)
+		if isFlag {
+			i = ni
+			continue
 		}
+		rest = append(rest, args[i])
 	}
 	if g.vdom == "" {
 		g.vdom = "root"
 	}
 	return g, rest, map[string]string{}
+}
+
+func consumeGlobal(args []string, i int, g *globals) (int, bool) {
+	a := args[i]
+	if ni, ok := consumeVdomFlags(args, i, a, g); ok {
+		return ni, true
+	}
+	if consumeDisplayFlags(a, g) {
+		return i, true
+	}
+	if ni, ok := consumeInputFlags(args, i, a, g); ok {
+		return ni, true
+	}
+	if ni, ok := consumeFilterFlags(args, i, a, g); ok {
+		return ni, true
+	}
+	if ni, ok := consumeConnFlags(args, i, a); ok {
+		return ni, true
+	}
+	return i, false
+}
+
+func consumeVdomFlags(args []string, i int, a string, g *globals) (int, bool) {
+	switch {
+	case a == "--vdom" && i+1 < len(args):
+		g.vdom = args[i+1]
+		g.vdomSet = true
+		return i + 1, true
+	case len(a) > 7 && a[:7] == "--vdom=":
+		g.vdom = a[7:]
+		g.vdomSet = true
+		return i, true
+	case a == "--dry-run":
+		g.dryRun = true
+		return i, true
+	}
+	return i, false
+}
+
+func consumeDisplayFlags(a string, g *globals) bool {
+	switch {
+	case a == "--pretty" || a == "--json":
+		output.Pretty = a == "--pretty"
+		return true
+	case a == "--yes":
+		g.yes = true
+		return true
+	case a == "--insecure":
+		return true
+	}
+	return false
+}
+
+func consumeInputFlags(args []string, i int, a string, g *globals) (int, bool) {
+	switch {
+	case a == "--from-stdin":
+		g.fromSrc = "-"
+		return i, true
+	case a == "--from-file" && i+1 < len(args):
+		g.fromSrc = args[i+1]
+		return i + 1, true
+	case len(a) > 12 && a[:12] == "--from-file=":
+		g.fromSrc = a[12:]
+		return i, true
+	}
+	return i, false
+}
+
+func consumeFilterFlags(args []string, i int, a string, g *globals) (int, bool) {
+	switch {
+	case (a == "--filter" || a == "--contains") && i+1 < len(args):
+		g.filter = args[i+1]
+		return i + 1, true
+	case len(a) > 9 && a[:9] == "--filter=":
+		g.filter = a[9:]
+		return i, true
+	case len(a) > 11 && a[:11] == "--contains=":
+		g.filter = a[11:]
+		return i, true
+	}
+	return i, false
+}
+
+func consumeConnFlags(args []string, i int, a string) (int, bool) {
+	switch {
+	case a == "--profile" && i+1 < len(args):
+		return i + 1, true // consumed in main; stripped here so positionals stay clean
+	case len(a) > 10 && a[:10] == "--profile=":
+		return i, true
+	case a == "--host" && i+1 < len(args):
+		return i + 1, true
+	case len(a) > 7 && a[:7] == "--host=":
+		return i, true
+	case a == "--api-key" && i+1 < len(args):
+		return i + 1, true
+	case len(a) > 10 && a[:10] == "--api-key=":
+		return i, true
+	case a == "--token" && i+1 < len(args):
+		return i + 1, true
+	case len(a) > 8 && a[:8] == "--token=":
+		return i, true
+	case a == "--api-key-env" && i+1 < len(args):
+		return i + 1, true
+	case len(a) > 14 && a[:14] == "--api-key-env=":
+		return i, true
+	case a == "--token-env" && i+1 < len(args):
+		return i + 1, true
+	case len(a) > 12 && a[:12] == "--token-env=":
+		return i, true
+	}
+	return i, false
 }
 
 func readJSONInput(fromSrc string, v any) error {
@@ -353,86 +439,114 @@ func runAddress(ctx context.Context, d Deps, args []string) int {
 	g, rest, _ := parseGlobals(rest)
 	switch verb {
 	case "list":
-		list, err := d.Addr.List(ctx, g.vdom)
-		if err != nil {
-			output.Fail("api_error", err)
-			return 2
-		}
-		output.Print(filterSlice(list, g.filter))
-		return 0
+		return runAddressList(ctx, d, g)
 	case "get":
-		if len(rest) < 1 {
-			output.Fail("usage", fmt.Errorf("usage: fgcli address get <name>"))
-			return 1
-		}
-		a, err := d.Addr.Get(ctx, rest[0], g.vdom)
-		if err != nil {
-			output.Fail("api_error", err)
-			return 2
-		}
-		output.Print(a)
-		return 0
+		return runAddressGet(ctx, d, g, rest)
 	case "create", "update":
-		var a daddr.Address
-		if g.fromSrc != "" {
-			if err := readJSONInput(g.fromSrc, &a); err != nil {
-				output.Fail("input_error", err)
-				return 1
-			}
-		} else {
-			a = daddr.Address{
-				Name:    flagVal(rest, "name"),
-				Subnet:  flagVal(rest, "subnet"),
-				Type:    flagVal(rest, "type"),
-				Comment: flagVal(rest, "comment"),
-			}
-			if len(rest) >= 1 && a.Name == "" && verb == "update" {
-				a.Name = rest[0]
-			}
-		}
-		if err := a.Validate(); err != nil {
-			output.Fail("validation_error", err)
-			return 1
-		}
-		if g.dryRun {
-			output.Print(map[string]any{"dry_run": true, "address": a, "vdom": g.vdom})
-			return 0
-		}
-		var err error
-		if verb == "create" {
-			a, err = d.Addr.Create(ctx, a, g.vdom)
-		} else {
-			a, err = d.Addr.Update(ctx, a, g.vdom)
-		}
-		if err != nil {
-			output.Fail("api_error", err)
-			return 2
-		}
-		output.Print(a)
-		return 0
+		return runAddressSave(ctx, d, verb, g, rest)
 	case "delete":
-		if len(rest) < 1 {
-			output.Fail("usage", fmt.Errorf("usage: fgcli address delete <name> --yes"))
-			return 1
-		}
-		if !g.yes && !g.dryRun {
-			output.Fail("confirm_required", fmt.Errorf("refusing without --yes (or use --dry-run)"))
-			return 1
-		}
-		if g.dryRun {
-			output.Print(map[string]any{"dry_run": true, "delete": rest[0]})
-			return 0
-		}
-		if err := d.Addr.Delete(ctx, rest[0], g.vdom); err != nil {
-			output.Fail("api_error", err)
-			return 2
-		}
-		output.Print(map[string]string{"deleted": rest[0]})
-		return 0
+		return runAddressDelete(ctx, d, g, rest)
 	default:
 		output.Fail("usage", fmt.Errorf("unknown address verb %q", verb))
 		return 1
 	}
+}
+
+func runAddressList(ctx context.Context, d Deps, g globals) int {
+	list, err := d.Addr.List(ctx, g.vdom)
+	if err != nil {
+		output.Fail("api_error", err)
+		return 2
+	}
+	output.Print(filterSlice(list, g.filter))
+	return 0
+}
+
+func runAddressGet(ctx context.Context, d Deps, g globals, rest []string) int {
+	if len(rest) < 1 {
+		output.Fail("usage", fmt.Errorf("usage: fgcli address get <name>"))
+		return 1
+	}
+	a, err := d.Addr.Get(ctx, rest[0], g.vdom)
+	if err != nil {
+		output.Fail("api_error", err)
+		return 2
+	}
+	output.Print(a)
+	return 0
+}
+
+func runAddressSave(ctx context.Context, d Deps, verb string, g globals, rest []string) int {
+	a, ok := loadAddressInput(g, rest, verb)
+	if !ok {
+		return 1
+	}
+	if err := a.Validate(); err != nil {
+		output.Fail("validation_error", err)
+		return 1
+	}
+	if g.dryRun {
+		output.Print(map[string]any{"dry_run": true, "address": a, "vdom": g.vdom})
+		return 0
+	}
+	return persistAddress(ctx, d, verb, a, g.vdom)
+}
+
+func loadAddressInput(g globals, rest []string, verb string) (daddr.Address, bool) {
+	if g.fromSrc != "" {
+		var a daddr.Address
+		if err := readJSONInput(g.fromSrc, &a); err != nil {
+			output.Fail("input_error", err)
+			return daddr.Address{}, false
+		}
+		return a, true
+	}
+	a := daddr.Address{
+		Name:    flagVal(rest, "name"),
+		Subnet:  flagVal(rest, "subnet"),
+		Type:    flagVal(rest, "type"),
+		Comment: flagVal(rest, "comment"),
+	}
+	if len(rest) >= 1 && a.Name == "" && verb == "update" {
+		a.Name = rest[0]
+	}
+	return a, true
+}
+
+func persistAddress(ctx context.Context, d Deps, verb string, a daddr.Address, vdom string) int {
+	var err error
+	if verb == "create" {
+		a, err = d.Addr.Create(ctx, a, vdom)
+	} else {
+		a, err = d.Addr.Update(ctx, a, vdom)
+	}
+	if err != nil {
+		output.Fail("api_error", err)
+		return 2
+	}
+	output.Print(a)
+	return 0
+}
+
+func runAddressDelete(ctx context.Context, d Deps, g globals, rest []string) int {
+	if len(rest) < 1 {
+		output.Fail("usage", fmt.Errorf("usage: fgcli address delete <name> --yes"))
+		return 1
+	}
+	if !g.yes && !g.dryRun {
+		output.Fail("confirm_required", fmt.Errorf("refusing without --yes (or use --dry-run)"))
+		return 1
+	}
+	if g.dryRun {
+		output.Print(map[string]any{"dry_run": true, "delete": rest[0]})
+		return 0
+	}
+	if err := d.Addr.Delete(ctx, rest[0], g.vdom); err != nil {
+		output.Fail("api_error", err)
+		return 2
+	}
+	output.Print(map[string]string{"deleted": rest[0]})
+	return 0
 }
 
 func runPolicy(ctx context.Context, d Deps, args []string) int {

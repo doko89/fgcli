@@ -46,12 +46,7 @@ func (u *UseCase) Trace(ctx context.Context, vdom string, in Input) (Result, err
 	if err != nil {
 		return res, err
 	}
-	for i := range vips {
-		if vips[i].ExtIP == in.Dst && portOK(vips[i].PortForward, vips[i].ExtPort, in.DPort) {
-			res.Vip = &vips[i]
-			break
-		}
-	}
+	res.Vip = findVip(vips, in)
 	pols, err := u.Pols.List(ctx, vdom)
 	if err != nil {
 		return res, err
@@ -60,49 +55,85 @@ func (u *UseCase) Trace(ctx context.Context, vdom string, in Input) (Result, err
 	if err != nil {
 		return res, err
 	}
-	subnets := map[string]string{}
-	for _, a := range addrs {
-		subnets[strings.ToLower(a.Name)] = a.Subnet
-	}
+	subnets := buildSubnetMap(addrs)
 	svcs, err := u.Svcs.List(ctx, vdom)
 	if err != nil {
 		return res, err
 	}
-	ports := map[string]dsvc.Svc{}
-	for _, s := range svcs {
-		ports[strings.ToLower(s.Name)] = s
-	}
-	var vipName string
-	if res.Vip != nil {
-		vipName = strings.ToLower(res.Vip.Name)
-	}
-	for _, p := range pols {
-		via := []string{}
-		if ok, why := dstLeg(p, vipName, in.Dst, subnets); ok {
-			via = append(via, why)
-		} else {
-			continue
-		}
-		if ok, why := srcLeg(p, in.Src, subnets); ok {
-			via = append(via, why)
-		} else {
-			continue
-		}
-		if ok, why := svcLeg(p, in.DPort, ports); ok {
-			via = append(via, why)
-		} else {
-			continue
-		}
-		if strings.EqualFold(p.Status, "disable") {
-			via = append(via, "status:DISABLED")
-		}
-		res.Policies = append(res.Policies, PolicyHit{Policy: p, Via: via})
-	}
+	ports := buildSvcMap(svcs)
+	res.Policies = matchPolicies(pols, vipNameOf(res.Vip), in, subnets, ports)
 	sortHits(res.Policies)
 	if res.Vip == nil {
 		res.Note = fmt.Sprintf("no vip with extip %s (and dport %d); inbound is not DNATed on this box", in.Dst, in.DPort)
 	}
 	return res, nil
+}
+
+func findVip(vips []dvip.Vip, in Input) *dvip.Vip {
+	for i := range vips {
+		if vips[i].ExtIP == in.Dst && portOK(vips[i].PortForward, vips[i].ExtPort, in.DPort) {
+			return &vips[i]
+		}
+	}
+	return nil
+}
+
+func buildSubnetMap(addrs []daddr.Address) map[string]string {
+	subnets := map[string]string{}
+	for _, a := range addrs {
+		subnets[strings.ToLower(a.Name)] = a.Subnet
+	}
+	return subnets
+}
+
+func buildSvcMap(svcs []dsvc.Svc) map[string]dsvc.Svc {
+	ports := map[string]dsvc.Svc{}
+	for _, s := range svcs {
+		ports[strings.ToLower(s.Name)] = s
+	}
+	return ports
+}
+
+func vipNameOf(v *dvip.Vip) string {
+	if v == nil {
+		return ""
+	}
+	return strings.ToLower(v.Name)
+}
+
+func matchPolicies(pols []dpol.Policy, vipName string, in Input, subnets map[string]string, ports map[string]dsvc.Svc) []PolicyHit {
+	out := []PolicyHit{}
+	for _, p := range pols {
+		hit, ok := matchOnePolicy(p, vipName, in, subnets, ports)
+		if !ok {
+			continue
+		}
+		out = append(out, hit)
+	}
+	return out
+}
+
+func matchOnePolicy(p dpol.Policy, vipName string, in Input, subnets map[string]string, ports map[string]dsvc.Svc) (PolicyHit, bool) {
+	via := []string{}
+	ok, why := dstLeg(p, vipName, in.Dst, subnets)
+	if !ok {
+		return PolicyHit{}, false
+	}
+	via = append(via, why)
+	ok, why = srcLeg(p, in.Src, subnets)
+	if !ok {
+		return PolicyHit{}, false
+	}
+	via = append(via, why)
+	ok, why = svcLeg(p, in.DPort, ports)
+	if !ok {
+		return PolicyHit{}, false
+	}
+	via = append(via, why)
+	if strings.EqualFold(p.Status, "disable") {
+		via = append(via, "status:DISABLED")
+	}
+	return PolicyHit{Policy: p, Via: via}, true
 }
 
 // sortHits orders specific matches first: vip-name > concrete subnet >

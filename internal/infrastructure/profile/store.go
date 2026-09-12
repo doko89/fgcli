@@ -185,55 +185,81 @@ type Warning struct {
 // keys, missing secrets, duplicate hosts, insecure flags.
 func ValidateFile(f *File) []Warning {
 	out := []Warning{}
-	if f.Active != "" {
-		if _, ok := f.Profiles[f.Active]; !ok {
-			out = append(out, Warning{Severity: "error", Code: "unknown_active",
-				Message: fmt.Sprintf("active profile %q not found", f.Active)})
-		}
-	} else if len(f.Profiles) > 0 {
-		out = append(out, Warning{Severity: "info", Code: "no_active",
-			Message: "no active profile (use: fgcli profile use <name>)"})
-	}
+	appendActiveWarnings(f, &out)
 	byHost := map[string][]string{}
 	for name, pr := range f.Profiles {
-		if strings.TrimSpace(pr.Host) == "" {
-			out = append(out, Warning{Profile: name, Severity: "error", Code: "missing_host",
-				Message: "host is empty"})
-		} else {
-			byHost[pr.Host] = append(byHost[pr.Host], name)
-		}
-		key := secret(pr.APIKey, pr.APIKeyEnv)
-		if key == "" {
-			key = secret(pr.Token, pr.TokenEnv)
-		}
-		switch {
-		case pr.APIKey == "" && pr.APIKeyEnv == "" && pr.Token == "" && pr.TokenEnv == "":
-			out = append(out, Warning{Profile: name, Severity: "error", Code: "missing_secret",
-				Message: "no api_key/api_key_env configured"})
-		case key == "":
-			out = append(out, Warning{Profile: name, Severity: "error", Code: "missing_secret",
-				Message: "secret env var is unset or empty"})
-		case IsPlaceholder(key):
-			out = append(out, Warning{Profile: name, Severity: "error", Code: "placeholder_key",
-				Message: "api_key looks like a placeholder — auth will fail"})
-		}
-		if pr.Insecure {
-			out = append(out, Warning{Profile: name, Severity: "warn", Code: "insecure",
-				Message: "insecure:true disables TLS verification"})
-		}
+		appendProfileWarnings(name, pr, &out, byHost)
 	}
+	appendDuplicateHostWarnings(byHost, &out)
+	sortWarnings(out)
+	return out
+}
+
+func appendActiveWarnings(f *File, out *[]Warning) {
+	if f.Active != "" {
+		if _, ok := f.Profiles[f.Active]; !ok {
+			*out = append(*out, Warning{Severity: "error", Code: "unknown_active",
+				Message: fmt.Sprintf("active profile %q not found", f.Active)})
+		}
+		return
+	}
+	if len(f.Profiles) > 0 {
+		*out = append(*out, Warning{Severity: "info", Code: "no_active",
+			Message: "no active profile (use: fgcli profile use <name>)"})
+	}
+}
+
+func appendProfileWarnings(name string, pr Profile, out *[]Warning, byHost map[string][]string) {
+	appendHostWarning(name, pr, out, byHost)
+	appendSecretWarning(name, pr, out)
+	if pr.Insecure {
+		*out = append(*out, Warning{Profile: name, Severity: "warn", Code: "insecure",
+			Message: "insecure:true disables TLS verification"})
+	}
+}
+
+func appendHostWarning(name string, pr Profile, out *[]Warning, byHost map[string][]string) {
+	if strings.TrimSpace(pr.Host) == "" {
+		*out = append(*out, Warning{Profile: name, Severity: "error", Code: "missing_host",
+			Message: "host is empty"})
+		return
+	}
+	byHost[pr.Host] = append(byHost[pr.Host], name)
+}
+
+func appendSecretWarning(name string, pr Profile, out *[]Warning) {
+	key := secret(pr.APIKey, pr.APIKeyEnv)
+	if key == "" {
+		key = secret(pr.Token, pr.TokenEnv)
+	}
+	switch {
+	case pr.APIKey == "" && pr.APIKeyEnv == "" && pr.Token == "" && pr.TokenEnv == "":
+		*out = append(*out, Warning{Profile: name, Severity: "error", Code: "missing_secret",
+			Message: "no api_key/api_key_env configured"})
+	case key == "":
+		*out = append(*out, Warning{Profile: name, Severity: "error", Code: "missing_secret",
+			Message: "secret env var is unset or empty"})
+	case IsPlaceholder(key):
+		*out = append(*out, Warning{Profile: name, Severity: "error", Code: "placeholder_key",
+			Message: "api_key looks like a placeholder — auth will fail"})
+	}
+}
+
+func appendDuplicateHostWarnings(byHost map[string][]string, out *[]Warning) {
 	for host, names := range byHost {
 		if len(names) > 1 {
 			sort.Strings(names)
-			out = append(out, Warning{Severity: "info", Code: "duplicate_host",
+			*out = append(*out, Warning{Severity: "info", Code: "duplicate_host",
 				Message: fmt.Sprintf("host %s shared by: %s (verify — possible copy-paste)", host, strings.Join(names, ", "))})
 		}
 	}
+}
+
+func sortWarnings(out []Warning) {
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Profile != out[j].Profile {
 			return out[i].Profile < out[j].Profile
 		}
 		return out[i].Code < out[j].Code
 	})
-	return out
 }

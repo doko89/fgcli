@@ -21,6 +21,6 @@ func ValidSource(s string) error {
 	return nil
 }
 
-type Repository interface {
+type Fetcher interface {
 	Fetch(ctx context.Context, source, logtype, vdom string) ([]Entry, error)
 }

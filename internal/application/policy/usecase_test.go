@@ -23,8 +23,7 @@ func (f *fakeRepo) Create(ctx context.Context, p domain.Policy, vdom string) (do
 	return p, nil
 }
 func (f *fakeRepo) Update(ctx context.Context, p domain.Policy, vdom string) (domain.Policy, error) {
-	f.policies[p.ID] = p
-	return p, nil
+	return f.Create(ctx, p, vdom)
 }
 func (f *fakeRepo) Move(ctx context.Context, id, before, after int64, vdom string) error {
 	f.moved = [3]int64{id, before, after}

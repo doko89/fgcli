@@ -2,7 +2,7 @@ package backup
 
 import "context"
 
-// Repository downloads a config backup blob.
-type Repository interface {
+// Downloader downloads a config backup blob.
+type Downloader interface {
 	Download(ctx context.Context, scope string) ([]byte, error)
 }

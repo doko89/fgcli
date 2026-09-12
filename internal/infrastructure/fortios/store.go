@@ -20,12 +20,17 @@ func vdomQuery(vdom string) url.Values {
 	return q
 }
 
+const (
+	apiFirewallAddress = "/api/v2/cmdb/firewall/address"
+	apiFirewallPolicy  = "/api/v2/cmdb/firewall/policy"
+)
+
 type AddressRepo struct{ c *Client }
 
 func NewAddressRepo(c *Client) *AddressRepo { return &AddressRepo{c: c} }
 
 func (s *AddressRepo) List(ctx context.Context, vdom string) ([]daddr.Address, error) {
-	b, err := s.c.do(ctx, "GET", "/api/v2/cmdb/firewall/address", vdomQuery(vdom), nil)
+	b, err := s.c.do(ctx, "GET", apiFirewallAddress, vdomQuery(vdom), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +39,7 @@ func (s *AddressRepo) List(ctx context.Context, vdom string) ([]daddr.Address, e
 }
 
 func (s *AddressRepo) Get(ctx context.Context, name, vdom string) (daddr.Address, error) {
-	b, err := s.c.do(ctx, "GET", "/api/v2/cmdb/firewall/address/"+url.PathEscape(name), vdomQuery(vdom), nil)
+	b, err := s.c.do(ctx, "GET", apiFirewallAddress+"/"+url.PathEscape(name), vdomQuery(vdom), nil)
 	if err != nil {
 		return daddr.Address{}, err
 	}
@@ -49,21 +54,21 @@ func (s *AddressRepo) Get(ctx context.Context, name, vdom string) (daddr.Address
 }
 
 func (s *AddressRepo) Create(ctx context.Context, a daddr.Address, vdom string) (daddr.Address, error) {
-	if _, err := s.c.do(ctx, "POST", "/api/v2/cmdb/firewall/address", vdomQuery(vdom), a); err != nil {
+	if _, err := s.c.do(ctx, "POST", apiFirewallAddress, vdomQuery(vdom), a); err != nil {
 		return daddr.Address{}, err
 	}
 	return a, nil
 }
 
 func (s *AddressRepo) Update(ctx context.Context, a daddr.Address, vdom string) (daddr.Address, error) {
-	if _, err := s.c.do(ctx, "PUT", "/api/v2/cmdb/firewall/address/"+url.PathEscape(a.Name), vdomQuery(vdom), a); err != nil {
+	if _, err := s.c.do(ctx, "PUT", apiFirewallAddress+"/"+url.PathEscape(a.Name), vdomQuery(vdom), a); err != nil {
 		return daddr.Address{}, err
 	}
 	return a, nil
 }
 
 func (s *AddressRepo) Delete(ctx context.Context, name, vdom string) error {
-	_, err := s.c.do(ctx, "DELETE", "/api/v2/cmdb/firewall/address/"+url.PathEscape(name), vdomQuery(vdom), nil)
+	_, err := s.c.do(ctx, "DELETE", apiFirewallAddress+"/"+url.PathEscape(name), vdomQuery(vdom), nil)
 	return err
 }
 
@@ -72,7 +77,7 @@ type PolicyRepo struct{ c *Client }
 func NewPolicyRepo(c *Client) *PolicyRepo { return &PolicyRepo{c: c} }
 
 func (s *PolicyRepo) List(ctx context.Context, vdom string) ([]dpol.Policy, error) {
-	b, err := s.c.do(ctx, "GET", "/api/v2/cmdb/firewall/policy", vdomQuery(vdom), nil)
+	b, err := s.c.do(ctx, "GET", apiFirewallPolicy, vdomQuery(vdom), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +86,7 @@ func (s *PolicyRepo) List(ctx context.Context, vdom string) ([]dpol.Policy, erro
 }
 
 func (s *PolicyRepo) Get(ctx context.Context, id int64, vdom string) (dpol.Policy, error) {
-	b, err := s.c.do(ctx, "GET", "/api/v2/cmdb/firewall/policy/"+strconv.FormatInt(id, 10), vdomQuery(vdom), nil)
+	b, err := s.c.do(ctx, "GET", apiFirewallPolicy+"/"+strconv.FormatInt(id, 10), vdomQuery(vdom), nil)
 	if err != nil {
 		return dpol.Policy{}, err
 	}
@@ -96,19 +101,19 @@ func (s *PolicyRepo) Get(ctx context.Context, id int64, vdom string) (dpol.Polic
 }
 
 func (s *PolicyRepo) Delete(ctx context.Context, id int64, vdom string) error {
-	_, err := s.c.do(ctx, "DELETE", "/api/v2/cmdb/firewall/policy/"+strconv.FormatInt(id, 10), vdomQuery(vdom), nil)
+	_, err := s.c.do(ctx, "DELETE", apiFirewallPolicy+"/"+strconv.FormatInt(id, 10), vdomQuery(vdom), nil)
 	return err
 }
 
 func (s *PolicyRepo) Create(ctx context.Context, p dpol.Policy, vdom string) (dpol.Policy, error) {
-	if _, err := s.c.do(ctx, "POST", "/api/v2/cmdb/firewall/policy", vdomQuery(vdom), p); err != nil {
+	if _, err := s.c.do(ctx, "POST", apiFirewallPolicy, vdomQuery(vdom), p); err != nil {
 		return dpol.Policy{}, err
 	}
 	return p, nil
 }
 
 func (s *PolicyRepo) Update(ctx context.Context, p dpol.Policy, vdom string) (dpol.Policy, error) {
-	if _, err := s.c.do(ctx, "PUT", "/api/v2/cmdb/firewall/policy/"+strconv.FormatInt(p.ID, 10), vdomQuery(vdom), p); err != nil {
+	if _, err := s.c.do(ctx, "PUT", apiFirewallPolicy+"/"+strconv.FormatInt(p.ID, 10), vdomQuery(vdom), p); err != nil {
 		return dpol.Policy{}, err
 	}
 	return p, nil
@@ -121,7 +126,7 @@ func (s *PolicyRepo) Move(ctx context.Context, id, before, after int64, vdom str
 	} else {
 		q.Set("after", strconv.FormatInt(after, 10))
 	}
-	_, err := s.c.do(ctx, "POST", "/api/v2/cmdb/firewall/policy/"+strconv.FormatInt(id, 10)+"/move", q, nil)
+	_, err := s.c.do(ctx, "POST", apiFirewallPolicy+"/"+strconv.FormatInt(id, 10)+"/move", q, nil)
 	return err
 }
 

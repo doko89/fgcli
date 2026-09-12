@@ -6,9 +6,9 @@ import (
 	domain "github.com/local/fgcli/internal/domain/backup"
 )
 
-type UseCase struct{ repo domain.Repository }
+type UseCase struct{ repo domain.Downloader }
 
-func New(repo domain.Repository) *UseCase { return &UseCase{repo: repo} }
+func New(repo domain.Downloader) *UseCase { return &UseCase{repo: repo} }
 
 func (u *UseCase) Download(ctx context.Context, scope string) ([]byte, error) {
 	if scope == "" {

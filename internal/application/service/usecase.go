@@ -66,9 +66,9 @@ func (u *GroupUseCase) Delete(ctx context.Context, name, vdom string) error {
 	return u.repo.Delete(ctx, name, vdom)
 }
 
-type VoipUseCase struct{ repo domain.VoipRepository }
+type VoipUseCase struct{ repo domain.VoipGetter }
 
-func NewVoip(repo domain.VoipRepository) *VoipUseCase { return &VoipUseCase{repo: repo} }
+func NewVoip(repo domain.VoipGetter) *VoipUseCase { return &VoipUseCase{repo: repo} }
 
 func (u *VoipUseCase) Get(ctx context.Context, name, vdom string) (domain.VoipProfile, error) {
 	return u.repo.Get(ctx, name, vdom)

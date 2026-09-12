@@ -30,7 +30,7 @@ func (s *LogRepo) Fetch(ctx context.Context, source, logtype, vdom string) ([]dl
 	if err := decodeResultsAllowEmpty(b, &out); err != nil {
 		// Fall back to bare-array bodies.
 		if trimmed := bytes.TrimSpace(b); len(trimmed) > 0 && trimmed[0] == '[' {
-			if err2 := json.Unmarshal(trimmed, &out); err2 == nil {
+			if json.Unmarshal(trimmed, &out) == nil {
 				return out, nil
 			}
 		}

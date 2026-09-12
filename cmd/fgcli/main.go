@@ -40,52 +40,22 @@ func run(argv []string) int {
 		output.Fail("usage", errUsage())
 		return 1
 	}
-	for _, a := range argv {
-		if a == "--pretty" {
-			output.Pretty = true
-		}
-	}
+	applyPrettyFlag(argv)
 	// version/help/profile must work without auth (AI probe friendly)
-	if target, ok := cli.HelpTarget(argv); ok {
-		if target == "" {
-			printGeneralHelp()
-			return 0
-		}
-		cli.PrintHelp(target)
-		return 0
+	if code, done := runHelpCommand(argv); done {
+		return code
 	}
 	cmd := cli.TopCommand(argv)
-	if cmd == "version" {
-		output.Print(map[string]string{"version": version})
-		return 0
+	if code, done := runVersionCommand(cmd); done {
+		return code
 	}
-	if cmd == "profile" {
-		warnLegacyConfig()
-		for i, a := range argv {
-			if a == "profile" {
-				return cli.RunProfile(argv[i+1:])
-			}
-		}
+	if code, done := runProfileCommand(cmd, argv); done {
+		return code
 	}
 	// Precedence: flags > env > profile file.
-	cfg := overrideFromArgs(config.LoadEnv(), argv)
-	pf, err := profile.LoadFile()
-	if err != nil {
-		output.Fail("config_error", err)
-		return 1
-	}
-	cfg, err = profile.Resolve(cfg, pf, profileName(argv))
-	if err != nil {
-		output.Fail("config_error", err)
-		return 1
-	}
-	if err := cfg.Validate(); err != nil {
-		output.Fail("config_error", err)
-		return 1
-	}
-	if profile.IsPlaceholder(cfg.APIKey) {
-		output.Fail("config_error", errPlaceholderKey())
-		return 1
+	cfg, code, done := resolveConfig(argv)
+	if done {
+		return code
 	}
 	if cfg.Insecure {
 		output.Logf("warn: TLS verification disabled (insecure:true / FG_INSECURE=1) — do not use in prod")
@@ -126,6 +96,71 @@ func run(argv []string) int {
 	}
 	// default vdom from env when flag absent
 	return cli.Run(ctx, deps, argv)
+}
+
+func applyPrettyFlag(argv []string) {
+	for _, a := range argv {
+		if a == "--pretty" {
+			output.Pretty = true
+		}
+	}
+}
+
+func runHelpCommand(argv []string) (int, bool) {
+	target, ok := cli.HelpTarget(argv)
+	if !ok {
+		return 0, false
+	}
+	if target == "" {
+		printGeneralHelp()
+		return 0, true
+	}
+	cli.PrintHelp(target)
+	return 0, true
+}
+
+func runVersionCommand(cmd string) (int, bool) {
+	if cmd != "version" {
+		return 0, false
+	}
+	output.Print(map[string]string{"version": version})
+	return 0, true
+}
+
+func runProfileCommand(cmd string, argv []string) (int, bool) {
+	if cmd != "profile" {
+		return 0, false
+	}
+	warnLegacyConfig()
+	for i, a := range argv {
+		if a == "profile" {
+			return cli.RunProfile(argv[i+1:]), true
+		}
+	}
+	return 0, false
+}
+
+func resolveConfig(argv []string) (config.Config, int, bool) {
+	cfg := overrideFromArgs(config.LoadEnv(), argv)
+	pf, err := profile.LoadFile()
+	if err != nil {
+		output.Fail("config_error", err)
+		return config.Config{}, 1, true
+	}
+	cfg, err = profile.Resolve(cfg, pf, profileName(argv))
+	if err != nil {
+		output.Fail("config_error", err)
+		return config.Config{}, 1, true
+	}
+	if err := cfg.Validate(); err != nil {
+		output.Fail("config_error", err)
+		return config.Config{}, 1, true
+	}
+	if profile.IsPlaceholder(cfg.APIKey) {
+		output.Fail("config_error", errPlaceholderKey())
+		return config.Config{}, 1, true
+	}
+	return cfg, 0, false
 }
 
 func printGeneralHelp() {

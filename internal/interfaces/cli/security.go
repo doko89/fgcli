@@ -18,75 +18,111 @@ func runSecurity(ctx context.Context, d Deps, args []string) int {
 	g, rest, _ := parseGlobals(rest)
 	switch verb {
 	case "ips":
-		list, err := d.Security.Ips(ctx, g.vdom)
-		if err != nil {
-			output.Fail("api_error", err)
-			return 2
-		}
-		output.Print(filterSlice(list, g.filter))
-		return 0
+		return runSecurityIps(ctx, d, g)
 	case "waf":
-		if len(rest) >= 1 && rest[0] != "list" {
-			id, ok := secID(rest)
-			if !ok {
-				return 1
-			}
-			v, err := d.Security.GetWaf(ctx, id, g.vdom)
-			if err != nil {
-				output.Fail("api_error", err)
-				return 2
-			}
-			output.Print(v)
-			return 0
-		}
-		list, err := d.Security.ListWaf(ctx, g.vdom)
-		if err != nil {
-			output.Fail("api_error", err)
-			return 2
-		}
-		output.Print(filterSlice(list, g.filter))
-		return 0
+		return runSecurityWaf(ctx, d, g, rest)
 	case "dlp":
-		if len(rest) >= 1 && rest[0] != "list" {
-			id, ok := secID(rest)
-			if !ok {
-				return 1
-			}
-			v, err := d.Security.GetDlp(ctx, id, g.vdom)
-			if err != nil {
-				output.Fail("api_error", err)
-				return 2
-			}
-			output.Print(v)
-			return 0
-		}
-		list, err := d.Security.ListDlp(ctx, g.vdom)
-		if err != nil {
-			output.Fail("api_error", err)
-			return 2
-		}
-		output.Print(filterSlice(list, g.filter))
-		return 0
+		return runSecurityDlp(ctx, d, g, rest)
 	case "proxy-pac":
-		out := flagVal(args, "out")
-		if out == "" {
-			out = "proxy.pac"
-		}
-		b, err := d.Security.DownloadPac(ctx, g.vdom)
-		if err != nil {
-			output.Fail("api_error", err)
-			return 2
-		}
-		if err := os.WriteFile(out, b, 0o600); err != nil {
-			output.Fail("input_error", err)
-			return 1
-		}
-		output.Print(map[string]any{"path": out, "bytes": len(b)})
-		return 0
+		return runSecurityPac(ctx, d, args, g)
 	default:
 		output.Fail("usage", fmt.Errorf("unknown security verb %q", verb))
 		return 1
 	}
+}
+
+func runSecurityIps(ctx context.Context, d Deps, g globals) int {
+	list, err := d.Security.Ips(ctx, g.vdom)
+	if err != nil {
+		output.Fail("api_error", err)
+		return 2
+	}
+	output.Print(filterSlice(list, g.filter))
+	return 0
+}
+
+func runSecurityWaf(ctx context.Context, d Deps, g globals, rest []string) int {
+	if len(rest) >= 1 && rest[0] != "list" {
+		return runSecurityGetWaf(ctx, d, g, rest)
+	}
+	return runSecurityListWaf(ctx, d, g)
+}
+
+func runSecurityGetWaf(ctx context.Context, d Deps, g globals, rest []string) int {
+	id, ok := secID(rest)
+	if !ok {
+		return 1
+	}
+	v, err := d.Security.GetWaf(ctx, id, g.vdom)
+	if err != nil {
+		output.Fail("api_error", err)
+		return 2
+	}
+	output.Print(v)
+	return 0
+}
+
+func runSecurityListWaf(ctx context.Context, d Deps, g globals) int {
+	list, err := d.Security.ListWaf(ctx, g.vdom)
+	if err != nil {
+		output.Fail("api_error", err)
+		return 2
+	}
+	output.Print(filterSlice(list, g.filter))
+	return 0
+}
+
+func runSecurityDlp(ctx context.Context, d Deps, g globals, rest []string) int {
+	if len(rest) >= 1 && rest[0] != "list" {
+		return runSecurityGetDlp(ctx, d, g, rest)
+	}
+	return runSecurityListDlp(ctx, d, g)
+}
+
+func runSecurityGetDlp(ctx context.Context, d Deps, g globals, rest []string) int {
+	id, ok := secID(rest)
+	if !ok {
+		return 1
+	}
+	v, err := d.Security.GetDlp(ctx, id, g.vdom)
+	if err != nil {
+		output.Fail("api_error", err)
+		return 2
+	}
+	output.Print(v)
+	return 0
+}
+
+func runSecurityListDlp(ctx context.Context, d Deps, g globals) int {
+	list, err := d.Security.ListDlp(ctx, g.vdom)
+	if err != nil {
+		output.Fail("api_error", err)
+		return 2
+	}
+	output.Print(filterSlice(list, g.filter))
+	return 0
+}
+
+func runSecurityPac(ctx context.Context, d Deps, args []string, g globals) int {
+	out := flagVal(args, "out")
+	if out == "" {
+		out = "proxy.pac"
+	}
+	return downloadPac(ctx, d, g, out)
+}
+
+func downloadPac(ctx context.Context, d Deps, g globals, out string) int {
+	b, err := d.Security.DownloadPac(ctx, g.vdom)
+	if err != nil {
+		output.Fail("api_error", err)
+		return 2
+	}
+	if err := os.WriteFile(out, b, 0o600); err != nil {
+		output.Fail("input_error", err)
+		return 1
+	}
+	output.Print(map[string]any{"path": out, "bytes": len(b)})
+	return 0
 }
 
 func secID(rest []string) (int64, bool) {

@@ -2,7 +2,7 @@ package service
 
 import "context"
 
-type VoipRepository interface {
+type VoipGetter interface {
 	Get(ctx context.Context, name, vdom string) (VoipProfile, error)
 }
 

@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-// Repository is the authenticated escape hatch: any API path while more
+// Doer is the authenticated escape hatch: any API path while more
 // specific verbs are still missing. Output stays in the JSON envelope.
-type Repository interface {
+type Doer interface {
 	Do(ctx context.Context, method, path, vdom string, body json.RawMessage) (json.RawMessage, error)
 }
 
